@@ -6,9 +6,10 @@ mod render;
 use std::{env, path};
 
 use ggez::event;
-use ggez::graphics::{self};
+use ggez::graphics;
 use ggez::{Context, GameResult};
-use glam::*;
+
+use glam::Vec2;
 use render::*;
 
 struct SpriteSheet {
@@ -16,6 +17,8 @@ struct SpriteSheet {
     pawn_dark: graphics::Image,
     bishop_light: graphics::Image,
     bishop_dark: graphics::Image,
+    bishop_light_on_dark_square: graphics::Image,
+    bishop_dark_on_dark_square: graphics::Image,
     knight_light: graphics::Image,
     knight_dark: graphics::Image,
     rook_light: graphics::Image,
@@ -24,16 +27,17 @@ struct SpriteSheet {
     queen_dark: graphics::Image,
     king_light: graphics::Image,
     king_dark: graphics::Image,
+    offset : Vec2,
 }
 
 struct MainState {
     active_sprites: SpriteSheet,
-    pos_x: f32,
+    game : Option<chess_engine::chess_game::Game>
 }
 
 macro_rules! addpng {
     ($ctx:expr, $path:expr) => {{
-        graphics::Image::new($ctx, concat!("/png/", $path, ".png")).unwrap()
+        graphics::Image::new($ctx, concat!("/png90/", $path, ".png")).unwrap()
     }};
 }
 
@@ -44,19 +48,43 @@ impl MainState {
             pawn_dark: addpng!(ctx, "pd"),
             bishop_light: addpng!(ctx, "bl"),
             bishop_dark: addpng!(ctx, "bd"),
-            knight_light: addpng!(ctx, "kl"),
-            knight_dark: addpng!(ctx, "kd"),
+            bishop_light_on_dark_square: addpng!(ctx, "bl"),
+            bishop_dark_on_dark_square: addpng!(ctx, "bd"),
+            knight_light: addpng!(ctx, "nl"),
+            knight_dark: addpng!(ctx, "nd"),
             rook_light: addpng!(ctx, "rl"),
             rook_dark: addpng!(ctx, "rd"),
             queen_light: addpng!(ctx, "ql"),
             queen_dark: addpng!(ctx, "qd"),
             king_light: addpng!(ctx, "kl"),
             king_dark: addpng!(ctx, "kd"),
+            offset: Vec2::new(0.0,0.0)
         };
+
+        /*let active_sprites = SpriteSheet {
+            pawn_light: addpng!(ctx, "mpl"),
+            pawn_dark: addpng!(ctx, "mpd"),
+            bishop_light: addpng!(ctx, "mbl_2"),
+            bishop_dark: addpng!(ctx, "mbd"),
+            bishop_light_on_dark_square: addpng!(ctx, "mbl"),
+            bishop_dark_on_dark_square: addpng!(ctx, "mbd_2"),
+            knight_light: addpng!(ctx, "mnl"),
+            knight_dark: addpng!(ctx, "mnd"),
+            rook_light: addpng!(ctx, "mrl"),
+            rook_dark: addpng!(ctx, "mrd"),
+            queen_light: addpng!(ctx, "mql"),
+            queen_dark: addpng!(ctx, "mqd"),
+            king_light: addpng!(ctx, "mkl"),
+            king_dark: addpng!(ctx, "mkd"),
+            offset: Vec2::new(-0.05,-0.05)
+        };*/
+
+        let mut game = chess_engine::chess_game::Game::new();
+        game.set_up_board();
 
         let s = MainState {
             active_sprites,
-            pos_x: 0.0,
+            game: Some(game),
         };
         Ok(s)
     }
@@ -64,14 +92,17 @@ impl MainState {
 
 impl event::EventHandler<ggez::GameError> for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
-        self.pos_x = self.pos_x % 800.0 + 4.0;
+
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        render_clear(ctx);
-        render_board(ctx)?;
-        render_pieces(ctx, &self)?;
+        if self.game.is_some() { // game exists
+            render_clear(ctx);
+            render_board(ctx)?;
+            render_pieces(ctx, &self)?;
+        }
+        
         graphics::present(ctx)?;
         Ok(())
     }

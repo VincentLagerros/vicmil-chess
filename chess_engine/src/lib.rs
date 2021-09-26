@@ -184,7 +184,7 @@ pub mod chess_game {
     #[allow(dead_code)]
     #[derive(Clone, Copy)]
     pub struct Game {
-        board: [Option<ChessPiece>; 8 * 8],
+        pub board: [Option<ChessPiece>; 8 * 8],
         pub turn: ChessPieceColor,
         last_move: Option<BoardMove>,
         last_move_passant: bool,
