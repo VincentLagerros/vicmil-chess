@@ -1,7 +1,5 @@
 pub extern crate chess_engine;
-use std::{
-    io::{self, BufRead},
-};
+use std::io::{self, BufRead};
 
 fn print_game_info(game: &mut chess_engine::chess_game::Game) {
     game.print_board();
@@ -10,11 +8,9 @@ fn print_game_info(game: &mut chess_engine::chess_game::Game) {
         println!("Game is over!");
         if winner == None {
             println!("Draw");
-        }
-        else if winner.unwrap() == ChessPieceColor::White {
+        } else if winner.unwrap() == ChessPieceColor::White {
             println!("White wins!");
-        }
-        else if winner.unwrap() == ChessPieceColor::Black {
+        } else if winner.unwrap() == ChessPieceColor::Black {
             println!("Black wins!");
         }
         return;
@@ -55,8 +51,7 @@ fn main() {
                     println!("{}", error_message);
                 }
                 print_game_info(&mut game);
-            }
-            else if user_input.len() == 2 {
+            } else if user_input.len() == 2 {
                 // Print all possible moves for square
                 if user_input[0] == "moves" {
                     let position = user_input[1].clone();
@@ -64,17 +59,24 @@ fn main() {
                         println!("Invalid input");
                     }
                     let char_vec: Vec<char> = position.chars().collect();
-                    let result_letter = chess_engine::chess_game::BoardPosition::get_coordinate_from_letter(char_vec[0]);
-                    let result_number = chess_engine::chess_game::BoardPosition::get_coordinate_from_number(char_vec[1]);
+                    let result_letter =
+                        chess_engine::chess_game::BoardPosition::get_coordinate_from_letter(
+                            char_vec[0],
+                        );
+                    let result_number =
+                        chess_engine::chess_game::BoardPosition::get_coordinate_from_number(
+                            char_vec[1],
+                        );
                     if result_letter.is_ok() && result_number.is_ok() {
-                        let pos = chess_engine::chess_game::BoardPosition::new(result_letter.unwrap(), result_number.unwrap());
+                        let pos = chess_engine::chess_game::BoardPosition::new(
+                            result_letter.unwrap(),
+                            result_number.unwrap(),
+                        );
                         game.print_board_with_possible_moves(Some(pos));
-                    }
-                    else {
+                    } else {
                         println!("Invalid input");
                     }
-                }
-                else {
+                } else {
                     println!("Invalid input");
                 }
             } else {
