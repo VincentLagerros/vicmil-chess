@@ -25,10 +25,10 @@ pub mod chess_game {
     }
 
     type BoardPosType = u8;
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, PartialEq, Eq)]
     pub struct BoardPosition {
-        x: BoardPosType,
-        y: BoardPosType,
+        pub x: BoardPosType,
+        pub y: BoardPosType,
     }
     impl BoardPosition {
         pub fn new(x: BoardPosType, y: BoardPosType) -> Self {
@@ -184,7 +184,7 @@ pub mod chess_game {
     #[allow(dead_code)]
     #[derive(Clone, Copy)]
     pub struct Game {
-        pub board: [Option<ChessPiece>; 8 * 8],
+        board: [Option<ChessPiece>; 8 * 8],
         pub turn: ChessPieceColor,
         last_move: Option<BoardMove>,
         last_move_passant: bool,
