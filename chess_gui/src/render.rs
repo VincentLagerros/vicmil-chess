@@ -3,11 +3,31 @@ use ggez::graphics::{self, Color, Rect};
 use ggez::{Context, GameResult};
 use glam::*;
 
-use crate::{MainState, SpriteSheet};
+use crate::{ActiveGame, RenderConfig, SpriteSheet};
 
 pub(crate) const SCREEN_SIZE: (f32, f32) = (820f32, 820f32);
 
 const BOARD_SIZE: u8 = 8;
+const BOARD_NUMBERS : [char; BOARD_SIZE as usize] = [
+    '8',
+    '7',
+    '6',
+    '5',
+    '4',
+    '3',
+    '2',
+    '1',
+];
+const BOARD_LETTERS : [char; BOARD_SIZE as usize] = [
+    'a',
+    'b',
+    'c',
+    'd',
+    'e',
+    'f',
+    'g',
+    'h',
+];
 const BOARD_RENDER_SIZE: f32 = 720f32;
 const BOARD_RENDER_TILE_SIZE: f32 = BOARD_RENDER_SIZE / BOARD_SIZE as f32;
 
@@ -32,9 +52,9 @@ const WHITE_BOARD_COLOR: Color = Color {
 
 pub const HIGHLIGHT_COLOR: Color = Color {
     r: 0.49,
-    g: 0.68,
+    g: 0.88,
     b: 0.47,
-    a: 1.0,
+    a: 0.5,
 };
 
 pub const MOVE_COLOR: Color = Color {
@@ -123,6 +143,10 @@ pub(crate) fn render_highlight(ctx: &mut Context, pos: Option<BoardPosition>, co
     Ok(())
 }
 
+fn get_color(square_is_dark : bool) -> Color {
+    return if square_is_dark { BLACK_BOARD_COLOR } else { WHITE_BOARD_COLOR };
+}
+
 /** Just renders the background board */
 pub(crate) fn render_board(ctx: &mut Context) -> GameResult<()> {
     let bg_square = graphics::Mesh::new_rectangle(
@@ -156,8 +180,41 @@ pub(crate) fn render_board(ctx: &mut Context) -> GameResult<()> {
     Ok(())
 }
 
-pub(crate) fn render_pieces(ctx: &mut Context, state: &mut MainState) -> GameResult<()> {
+pub(crate) fn render_numbers(ctx: &mut Context, config: & RenderConfig)-> GameResult<()> {
+    let active_font = &config.fontsets[config.active_fontset_index];
+    let x_add_offset = active_font.font_size.x / 4.0;
+    let y_offset = Vec2::new(x_add_offset, BOARD_RENDER_TILE_SIZE - active_font.font_size.y);
+    let x_offset = Vec2::new(BOARD_RENDER_TILE_SIZE - active_font.font_size.x + x_add_offset, 0.0);
+    for x in 0..BOARD_SIZE {
+        let mut text = graphics::Text::new(BOARD_LETTERS[x as usize]);
+        text.set_font(active_font.font, active_font.font_size);
+        let dist = get_render_pos(x, BOARD_SIZE-1);
+        graphics::draw(
+            ctx,
+            &text,
+            graphics::DrawParam::new()
+                .dest(dist + y_offset).color(get_color(x % 2 == 1))
+        )?;
+    }
+
+    for y in 0..BOARD_SIZE {
+        let mut text = graphics::Text::new(BOARD_NUMBERS[y as usize]);
+        text.set_font(active_font.font, active_font.font_size);
+        let dist = get_render_pos(BOARD_SIZE-1,y );
+        graphics::draw(
+            ctx,
+            &text,
+            graphics::DrawParam::new()
+                .dest(dist + x_offset).color(get_color(y % 2 == 1))
+        )?;
+    }
+    Ok(())
+}
+
+pub(crate) fn render_pieces(ctx: &mut Context, config : &RenderConfig, state: &mut ActiveGame) -> GameResult<()> {
     let mut selected_piece : Option<(Vec2, ChessPiece, bool)> = None;
+
+    let active_sprites = &config.spritesets[config.active_sprites_index];
 
     for x in 0..BOARD_SIZE {
         for y in 0..BOARD_SIZE {
@@ -187,11 +244,10 @@ pub(crate) fn render_pieces(ctx: &mut Context, state: &mut MainState) -> GameRes
                     safe_piece.id,
                     safe_piece.color,
                     is_on_white,
-                    &state.active_sprites,
+                    active_sprites,
                 ),
                 graphics::DrawParam::new()
-                    .dest(dist)
-                    .offset(state.active_sprites.offset),
+                    .dest(dist + active_sprites.offset)
             )?;
         }
     }
@@ -209,11 +265,10 @@ pub(crate) fn render_pieces(ctx: &mut Context, state: &mut MainState) -> GameRes
             piece.id,
             piece.color,
             is_on_white,
-            &state.active_sprites,
+            active_sprites,
         ),
         graphics::DrawParam::new()
-            .dest(dist)
-            .offset(state.active_sprites.offset),
+            .dest(dist + active_sprites.offset)
     )?;
 
     Ok(())

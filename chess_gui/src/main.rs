@@ -8,7 +8,7 @@ use std::{env, path};
 use chess_engine::chess_game::{BoardMove, BoardPosition, ChessPieceId, Game};
 use ggez::event;
 use ggez::event::MouseButton;
-use ggez::graphics;
+use ggez::graphics::{self, Font, PxScale};
 use ggez::{Context, GameResult};
 
 use glam::Vec2;
@@ -32,13 +32,27 @@ struct SpriteSheet {
     offset: Vec2,
 }
 
-struct MainState {
-    active_sprites: SpriteSheet,
+struct FontSet {
+    font: Font,
+    font_size: PxScale,
+}
+
+struct ActiveGame {
     game: chess_engine::chess_game::Game,
     selected_square: Option<BoardPosition>,
     hover_position: Option<Vec2>,
     possible_moves: Option<Vec<BoardPosition>>,
+}
 
+struct RenderConfig {
+    spritesets: Vec<SpriteSheet>,
+    fontsets: Vec<FontSet>,
+
+    active_sprites_index: usize,
+    active_fontset_index: usize,
+}
+
+struct InputStatus {
     pos_x: f32,
     pos_y: f32,
     mouse_down: bool,
@@ -46,64 +60,106 @@ struct MainState {
     mouse_released: bool,
 }
 
+struct MainState {
+    render_config: RenderConfig,
+    active_game: ActiveGame,
+    input_staus: InputStatus,
+}
+
+macro_rules! add_piece_sprite {
+    ($ctx:expr,$path:expr, $name:expr) => {{
+        graphics::Image::new($ctx, concat!("/piece/", $path, "/", $name, ".png")).unwrap()
+    }};
+}
+
 macro_rules! addpng {
     ($ctx:expr, $path:expr) => {{
-        graphics::Image::new($ctx, concat!("/png90/", $path, ".png")).unwrap()
+        graphics::Image::new($ctx, concat!("/img/", $path, ".png")).unwrap()
+    }};
+}
+
+macro_rules! addfont {
+    ($ctx:expr, $path:expr) => {{
+        graphics::Font::new($ctx, concat!("/font/", $path, ".ttf")).unwrap()
+    }};
+}
+macro_rules! add_sprite_sheet {
+    ($ctx:expr, $path:expr, $offset:expr) => {{
+        SpriteSheet {
+            pawn_light: add_piece_sprite!($ctx, $path, "wP"),
+            pawn_dark: add_piece_sprite!($ctx, $path, "bP"),
+            bishop_light: add_piece_sprite!($ctx, $path, "wB"),
+            bishop_dark: add_piece_sprite!($ctx, $path, "bB"),
+            bishop_light_on_dark_square: add_piece_sprite!($ctx, $path, "wB"),
+            bishop_dark_on_dark_square: add_piece_sprite!($ctx, $path, "bB"),
+            knight_light: add_piece_sprite!($ctx, $path, "wN"),
+            knight_dark: add_piece_sprite!($ctx, $path, "bN"),
+            rook_light: add_piece_sprite!($ctx, $path, "wR"),
+            rook_dark: add_piece_sprite!($ctx, $path, "bR"),
+            queen_light: add_piece_sprite!($ctx, $path, "wQ"),
+            queen_dark: add_piece_sprite!($ctx, $path, "bQ"),
+            king_light: add_piece_sprite!($ctx, $path, "wK"),
+            king_dark: add_piece_sprite!($ctx, $path, "bK"),
+            offset: $offset,
+        }
     }};
 }
 
 impl MainState {
     fn new(ctx: &mut Context) -> GameResult<MainState> {
-        /*let active_sprites = SpriteSheet {
-            pawn_light: addpng!(ctx, "pl"),
-            pawn_dark: addpng!(ctx, "pd"),
-            bishop_light: addpng!(ctx, "bl"),
-            bishop_dark: addpng!(ctx, "bd"),
-            bishop_light_on_dark_square: addpng!(ctx, "bl"),
-            bishop_dark_on_dark_square: addpng!(ctx, "bd"),
-            knight_light: addpng!(ctx, "nl"),
-            knight_dark: addpng!(ctx, "nd"),
-            rook_light: addpng!(ctx, "rl"),
-            rook_dark: addpng!(ctx, "rd"),
-            queen_light: addpng!(ctx, "ql"),
-            queen_dark: addpng!(ctx, "qd"),
-            king_light: addpng!(ctx, "kl"),
-            king_dark: addpng!(ctx, "kd"),
-            offset: Vec2::new(0.0, 0.0),
-        };*/
+        let regular_sprites = add_sprite_sheet!(ctx, "regular",Vec2::new(0.0,0.0));
+        let horsey_sprites = add_sprite_sheet!(ctx, "horsey",Vec2::new(5.0, 5.0));
+        let meme_sprites = SpriteSheet {
+            pawn_light: add_piece_sprite!(ctx, "meme", "mpl"),
+            pawn_dark: add_piece_sprite!(ctx, "meme", "mpd"),
+            bishop_light: add_piece_sprite!(ctx, "meme", "mbl_2"),
+            bishop_dark: add_piece_sprite!(ctx, "meme", "mbd"),
+            bishop_light_on_dark_square: add_piece_sprite!(ctx, "meme", "mbl"),
+            bishop_dark_on_dark_square: add_piece_sprite!(ctx, "meme", "mbd_2"),
+            knight_light: add_piece_sprite!(ctx, "meme", "mnl"),
+            knight_dark: add_piece_sprite!(ctx, "meme", "mnd"),
+            rook_light: add_piece_sprite!(ctx, "meme", "mrl"),
+            rook_dark: add_piece_sprite!(ctx, "meme", "mrd"),
+            queen_light: add_piece_sprite!(ctx, "meme", "mql"),
+            queen_dark: add_piece_sprite!(ctx, "meme", "mqd"),
+            king_light: add_piece_sprite!(ctx, "meme", "mkl"),
+            king_dark: add_piece_sprite!(ctx, "meme", "mkd"),
+            offset: Vec2::new(5.0, 5.0),
+        };
 
-        let active_sprites = SpriteSheet {
-            pawn_light: addpng!(ctx, "mpl"),
-            pawn_dark: addpng!(ctx, "mpd"),
-            bishop_light: addpng!(ctx, "mbl_2"),
-            bishop_dark: addpng!(ctx, "mbd"),
-            bishop_light_on_dark_square: addpng!(ctx, "mbl"),
-            bishop_dark_on_dark_square: addpng!(ctx, "mbd_2"),
-            knight_light: addpng!(ctx, "mnl"),
-            knight_dark: addpng!(ctx, "mnd"),
-            rook_light: addpng!(ctx, "mrl"),
-            rook_dark: addpng!(ctx, "mrd"),
-            queen_light: addpng!(ctx, "mql"),
-            queen_dark: addpng!(ctx, "mqd"),
-            king_light: addpng!(ctx, "mkl"),
-            king_dark: addpng!(ctx, "mkd"),
-            offset: Vec2::new(-0.05,-0.05)
+        let regular_font = FontSet {
+            font: Font::default(),
+            font_size: PxScale { x: 30f32, y: 30f32 },
+        };
+
+        let nice_font = FontSet {
+            font: addfont!(ctx, "NotoSans-Bold"),
+            font_size: PxScale { x: 30f32, y: 30f32 },
         };
 
         let mut game = chess_engine::chess_game::Game::new();
         game.set_up_board();
 
         let s = MainState {
-            active_sprites,
-            game: game,
-            selected_square: None,
-            hover_position: None,
-            pos_x: 0.0,
-            pos_y: 0.0,
-            mouse_down: false,
-            mouse_clicked: false,
-            possible_moves: None,
-            mouse_released: false,
+            render_config: RenderConfig {
+                spritesets: vec![regular_sprites, meme_sprites, horsey_sprites],
+                fontsets: vec![regular_font, nice_font],
+                active_fontset_index: 1,
+                active_sprites_index: 2,
+            },
+            active_game: ActiveGame {
+                game: game,
+                selected_square: None,
+                hover_position: None,
+                possible_moves: None,
+            },
+            input_staus: InputStatus {
+                pos_x: 0.0,
+                pos_y: 0.0,
+                mouse_down: false,
+                mouse_clicked: false,
+                mouse_released: false,
+            },
         };
         Ok(s)
     }
@@ -132,78 +188,81 @@ fn get_possible_moves_from_position(game: Game, pos: BoardPosition) -> Vec<Board
     return possible_moves;
 }
 
+fn do_game_logic(input: &InputStatus, state: &mut ActiveGame) {
+    if input.mouse_down {
+        let mouse_pos = Vec2::new(input.pos_x, input.pos_y);
+        state.hover_position = Some(mouse_pos);
+        if input.mouse_clicked {
+            let selected_square = get_square_from_screen(mouse_pos);
+
+            if selected_square.is_some()
+                && state
+                    .game
+                    .get_board_piece_clone(selected_square.unwrap())
+                    .is_some()
+            {
+                state.selected_square = selected_square;
+                state.possible_moves = Some(get_possible_moves_from_position(
+                    state.game,
+                    selected_square.unwrap(),
+                ));
+            } else {
+                state.selected_square = None;
+            }
+        }
+    } else {
+        if input.mouse_released && state.hover_position.is_some() {
+            let move_square = get_square_from_screen(state.hover_position.unwrap());
+            if move_square.is_some()
+                && state.selected_square.is_some()
+                && state.possible_moves.is_some()
+                && state
+                    .possible_moves
+                    .as_ref()
+                    .unwrap()
+                    .contains(&move_square.unwrap())
+            {
+                let move_to = move_square.unwrap();
+                let move_from = state.selected_square.unwrap();
+
+                let result = state.game.move_piece(
+                    BoardMove::new(move_from.x, move_from.y, move_to.x, move_to.y),
+                    false,
+                    Some(ChessPieceId::Queen),
+                );
+                if result.is_err() {
+                    println!("Bruh how?")
+                }
+            }
+        } else {
+            state.possible_moves = None;
+            state.hover_position = None;
+        }
+    }
+}
+
 impl event::EventHandler<ggez::GameError> for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        // game exists, aka not in menu
+        do_game_logic(&self.input_staus, &mut self.active_game);
 
-        if self.mouse_down {
-            let mouse_pos = Vec2::new(self.pos_x, self.pos_y);
-            self.hover_position = Some(mouse_pos);
-            if self.mouse_clicked {
-                let selected_square = get_square_from_screen(mouse_pos);
-
-                if selected_square.is_some()
-                    && self
-                        .game
-                        .get_board_piece_clone(selected_square.unwrap())
-                        .is_some()
-                {
-                    self.selected_square = selected_square;
-                    self.possible_moves = Some(get_possible_moves_from_position(
-                        self.game,
-                        selected_square.unwrap(),
-                    ));
-                } else {
-                    self.selected_square = None;
-                }
-            }
-        } else {
-            if self.mouse_released && self.hover_position.is_some() {
-                let move_square = get_square_from_screen(self.hover_position.unwrap());
-                if move_square.is_some()
-                    && self.selected_square.is_some()
-                    && self.possible_moves.is_some()
-                    && self
-                        .possible_moves
-                        .as_ref()
-                        .unwrap()
-                        .contains(&move_square.unwrap())
-                {
-                    let move_to = move_square.unwrap();
-                    let move_from = self.selected_square.unwrap();
-
-                    let result = self.game.move_piece(
-                        BoardMove::new(move_from.x, move_from.y, move_to.x, move_to.y),
-                        false,
-                        Some(ChessPieceId::Queen),
-                    );
-                    if result.is_err() {
-                        println!("Bruh how?")
-                    }
-                }
-            } else {
-                self.possible_moves = None;
-                self.hover_position = None;
+        render_clear(ctx);
+        render_board(ctx)?;
+        render_numbers(ctx, &self.render_config)?;
+        render_highlight(ctx, self.active_game.selected_square, HIGHLIGHT_COLOR)?;
+        if self.active_game.possible_moves.is_some() {
+            for pos in self.active_game.possible_moves.as_ref().unwrap() {
+                render_highlight(ctx, Some(*pos), MOVE_COLOR)?;
             }
         }
-            render_clear(ctx);
-            render_board(ctx)?;
-            render_highlight(ctx, self.selected_square, HIGHLIGHT_COLOR)?;
-            if self.possible_moves.is_some() {
-                for pos in self.possible_moves.as_ref().unwrap() {
-                    render_highlight(ctx, Some(*pos), MOVE_COLOR)?;
-                }
-            }
 
-            render_pieces(ctx, self)?;
-        
+        render_pieces(ctx, &self.render_config, &mut self.active_game)?;
 
-        self.mouse_released = false;
-        self.mouse_clicked = false;
+        self.input_staus.mouse_released = false;
+        self.input_staus.mouse_clicked = false;
         graphics::present(ctx)?;
         Ok(())
     }
@@ -215,8 +274,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
         _x: f32,
         _y: f32,
     ) {
-        self.mouse_down = true;
-        self.mouse_clicked = true;
+        self.input_staus.mouse_down = true;
+        self.input_staus.mouse_clicked = true;
         //println!("Mouse button pressed: {:?}, x: {}, y: {}", button, x, y);
     }
 
@@ -227,14 +286,14 @@ impl event::EventHandler<ggez::GameError> for MainState {
         _x: f32,
         _y: f32,
     ) {
-        self.mouse_down = false;
-        self.mouse_released = true;
+        self.input_staus.mouse_down = false;
+        self.input_staus.mouse_released = true;
         //println!("Mouse button released: {:?}, x: {}, y: {}", button, x, y);
     }
 
     fn mouse_motion_event(&mut self, _ctx: &mut Context, x: f32, y: f32, _xrel: f32, _yrel: f32) {
-        self.pos_x = x;
-        self.pos_y = y;
+        self.input_staus.pos_x = x;
+        self.input_staus.pos_y = y;
         //if self.mouse_down {
         // Mouse coordinates are PHYSICAL coordinates, but here we want logical coordinates.
 
