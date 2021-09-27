@@ -3,7 +3,7 @@ use ggez::graphics::{self, Color, Rect};
 use ggez::{Context, GameError, GameResult};
 use glam::*;
 
-use crate::{Action, ActiveGame, Icons, MainState, RenderConfig, SpriteSheet};
+use crate::{Action, ActiveGame, MainState, RenderConfig, SpriteSheet};
 
 pub(crate) const SCREEN_SIZE: (f32, f32) = (840f32, 840f32);
 
@@ -107,32 +107,32 @@ pub fn get_square_from_screen(mouse: Vec2) -> Option<BoardPosition> {
 fn get_piece_image(
     id: ChessPieceId,
     color: ChessPieceColor,
-    square_is_dark: bool,
+    square_is_black: bool,
     sprites: &SpriteSheet,
 ) -> &graphics::Image {
     if color == ChessPieceColor::White {
-        if id == ChessPieceId::Bishop && square_is_dark {
-            return &sprites.bishop_light_on_dark_square;
+        if id == ChessPieceId::Bishop && square_is_black {
+            return &sprites.bishop_white_on_black_square;
         }
         return match id {
-            ChessPieceId::Pawn => &sprites.pawn_light,
-            ChessPieceId::Knight => &sprites.knight_light,
-            ChessPieceId::Rook => &sprites.rook_light,
-            ChessPieceId::King => &sprites.king_light,
-            ChessPieceId::Queen => &sprites.queen_light,
-            ChessPieceId::Bishop => &sprites.bishop_light,
+            ChessPieceId::Pawn => &sprites.pawn_white,
+            ChessPieceId::Knight => &sprites.knight_white,
+            ChessPieceId::Rook => &sprites.rook_white,
+            ChessPieceId::King => &sprites.king_white,
+            ChessPieceId::Queen => &sprites.queen_white,
+            ChessPieceId::Bishop => &sprites.bishop_white,
         };
     } else {
-        if id == ChessPieceId::Bishop && square_is_dark {
-            return &sprites.bishop_dark_on_dark_square;
+        if id == ChessPieceId::Bishop && square_is_black {
+            return &sprites.bishop_black_on_black_square;
         }
         return match id {
-            ChessPieceId::Pawn => &sprites.pawn_dark,
-            ChessPieceId::Knight => &sprites.knight_dark,
-            ChessPieceId::Rook => &sprites.rook_dark,
-            ChessPieceId::King => &sprites.king_dark,
-            ChessPieceId::Queen => &sprites.queen_dark,
-            ChessPieceId::Bishop => &sprites.bishop_dark,
+            ChessPieceId::Pawn => &sprites.pawn_black,
+            ChessPieceId::Knight => &sprites.knight_black,
+            ChessPieceId::Rook => &sprites.rook_black,
+            ChessPieceId::King => &sprites.king_black,
+            ChessPieceId::Queen => &sprites.queen_black,
+            ChessPieceId::Bishop => &sprites.bishop_black,
         };
     }
 }
@@ -169,8 +169,8 @@ pub(crate) fn render_highlight(
     Ok(())
 }
 
-fn get_color(square_is_dark: bool) -> Color {
-    return if square_is_dark {
+fn get_color(square_is_black: bool) -> Color {
+    return if square_is_black {
         BLACK_BOARD_COLOR
     } else {
         WHITE_BOARD_COLOR
@@ -190,6 +190,7 @@ fn render_round_rect(ctx: &mut Context, pos: Vec2, size: Vec2, color: Color) -> 
     Ok(())
 }
 
+/** Renders a rounded square with an image*/
 pub fn render_button(
     ctx: &mut Context,
     pos: Vec2,
@@ -388,6 +389,8 @@ pub(crate) fn render_pieces(
 
     let active_sprites = &config.spritesets[config.active_sprites_index];
 
+    let half_tile = Vec2::new(BOARD_RENDER_TILE_SIZE / 2.0, BOARD_RENDER_TILE_SIZE / 2.0);
+
     for x in 0..BOARD_SIZE {
         for y in 0..BOARD_SIZE {
             let board_pos = BoardPosition::new(x, y);
@@ -404,7 +407,7 @@ pub(crate) fn render_pieces(
                 && board_pos == state.selected_square.unwrap()
             {
                 let selected_render_dist = state.hover_position.unwrap()
-                    - Vec2::new(BOARD_RENDER_TILE_SIZE / 2.0, BOARD_RENDER_TILE_SIZE / 2.0);
+                    - half_tile;
                 selected_piece = Some((selected_render_dist, safe_piece, is_on_white));
                 continue;
             }
@@ -414,7 +417,7 @@ pub(crate) fn render_pieces(
             graphics::draw(
                 ctx,
                 get_piece_image(safe_piece.id, safe_piece.color, is_on_white, active_sprites),
-                graphics::DrawParam::new().dest(dist + active_sprites.offset),
+                graphics::DrawParam::new().dest(dist + half_tile).offset(Vec2::new(0.5,0.5)),
             )?;
         }
     }
@@ -429,7 +432,7 @@ pub(crate) fn render_pieces(
     graphics::draw(
         ctx,
         get_piece_image(piece.id, piece.color, is_on_white, active_sprites),
-        graphics::DrawParam::new().dest(dist + active_sprites.offset),
+        graphics::DrawParam::new().dest(dist + half_tile).offset(Vec2::new(0.5,0.5)),
     )?;
 
     Ok(())
