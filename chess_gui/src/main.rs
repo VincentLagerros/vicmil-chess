@@ -44,12 +44,22 @@ struct ActiveGame {
     possible_moves: Option<Vec<BoardPosition>>,
 }
 
+struct Icons {
+    surrender: graphics::Image,
+    replay: graphics::Image,
+    settings: graphics::Image,
+    arrow_back: graphics::Image,
+    exit: graphics::Image,
+}
+
 struct RenderConfig {
     spritesets: Vec<SpriteSheet>,
     fontsets: Vec<FontSet>,
 
     active_sprites_index: usize,
     active_fontset_index: usize,
+
+    icons: Icons,
 }
 
 struct InputStatus {
@@ -107,8 +117,8 @@ macro_rules! add_sprite_sheet {
 
 impl MainState {
     fn new(ctx: &mut Context) -> GameResult<MainState> {
-        let regular_sprites = add_sprite_sheet!(ctx, "regular",Vec2::new(0.0,0.0));
-        let horsey_sprites = add_sprite_sheet!(ctx, "horsey",Vec2::new(5.0, 5.0));
+        let regular_sprites = add_sprite_sheet!(ctx, "regular", Vec2::new(0.0, 0.0));
+        let horsey_sprites = add_sprite_sheet!(ctx, "horsey", Vec2::new(5.0, 5.0));
         let meme_sprites = SpriteSheet {
             pawn_light: add_piece_sprite!(ctx, "meme", "mpl"),
             pawn_dark: add_piece_sprite!(ctx, "meme", "mpd"),
@@ -137,15 +147,24 @@ impl MainState {
             font_size: PxScale { x: 30f32, y: 30f32 },
         };
 
+        let icons = Icons {
+            surrender: addpng!(ctx, "surrender"),
+            replay: addpng!(ctx, "replay"),
+            settings: addpng!(ctx, "settings"),
+            arrow_back: addpng!(ctx, "arrow_back"),
+            exit: addpng!(ctx, "exit"),
+        };
+
         let mut game = chess_engine::chess_game::Game::new();
         game.set_up_board();
 
         let s = MainState {
             render_config: RenderConfig {
-                spritesets: vec![regular_sprites, meme_sprites, horsey_sprites],
+                spritesets: vec![regular_sprites, horsey_sprites, meme_sprites],
                 fontsets: vec![regular_font, nice_font],
                 active_fontset_index: 1,
-                active_sprites_index: 2,
+                active_sprites_index: 0,
+                icons,
             },
             active_game: ActiveGame {
                 game: game,
@@ -258,8 +277,19 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 render_highlight(ctx, Some(*pos), MOVE_COLOR)?;
             }
         }
-
+        let selected_button = render_buttons(ctx, self);
         render_pieces(ctx, &self.render_config, &mut self.active_game)?;
+
+        // change skin
+        if selected_button.is_some()
+            && selected_button.unwrap() == 2
+            && self.input_staus.mouse_clicked
+        {
+            self.render_config.active_sprites_index += 1;
+            if self.render_config.active_sprites_index >= self.render_config.spritesets.len() {
+                self.render_config.active_sprites_index = 0
+            }
+        }
 
         self.input_staus.mouse_released = false;
         self.input_staus.mouse_clicked = false;
