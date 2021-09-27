@@ -3,9 +3,10 @@
 
 mod render;
 
+use std::process::exit;
 use std::{env, path};
 
-use chess_engine::chess_game::{BoardMove, BoardPosition, ChessPieceId, Game};
+use chess_engine::chess_game::{BoardMove, BoardPosition, ChessPieceColor, ChessPieceId, Game};
 use ggez::event;
 use ggez::event::MouseButton;
 use ggez::graphics::{self, Font, PxScale};
@@ -50,6 +51,22 @@ struct Icons {
     settings: graphics::Image,
     arrow_back: graphics::Image,
     exit: graphics::Image,
+    confirm: graphics::Image,
+}
+
+#[derive(Clone, Copy)]
+enum Action {
+    Restart,
+    Quit,
+    None,
+}
+
+struct PendingAction {
+    text: String,
+    confirm: graphics::Image,
+    cancel: graphics::Image,
+    confirm_value: Action,
+    cancel_value: Action,
 }
 
 struct RenderConfig {
@@ -72,6 +89,7 @@ struct InputStatus {
 
 struct MainState {
     render_config: RenderConfig,
+    active_message: Option<PendingAction>,
     active_game: ActiveGame,
     input_staus: InputStatus,
 }
@@ -153,6 +171,7 @@ impl MainState {
             settings: addpng!(ctx, "settings"),
             arrow_back: addpng!(ctx, "arrow_back"),
             exit: addpng!(ctx, "exit"),
+            confirm: addpng!(ctx, "confirm"),
         };
 
         let mut game = chess_engine::chess_game::Game::new();
@@ -179,6 +198,7 @@ impl MainState {
                 mouse_clicked: false,
                 mouse_released: false,
             },
+            active_message: None,
         };
         Ok(s)
     }
@@ -188,7 +208,6 @@ fn get_possible_moves_from_position(game: Game, pos: BoardPosition) -> Vec<Board
     let mut possible_moves: Vec<BoardPosition> = Vec::new();
 
     for y in 0..8 {
-        print!("{} ", 8 - y);
         for x in 0..8 {
             let board_move;
             board_move = BoardMove::new(pos.x, pos.y, x, y);
@@ -207,7 +226,10 @@ fn get_possible_moves_from_position(game: Game, pos: BoardPosition) -> Vec<Board
     return possible_moves;
 }
 
-fn do_game_logic(input: &InputStatus, state: &mut ActiveGame) {
+fn do_game_logic(main_state: &mut MainState) {
+    let input = &main_state.input_staus;
+    let state = &mut main_state.active_game;
+
     if input.mouse_down {
         let mouse_pos = Vec2::new(input.pos_x, input.pos_y);
         state.hover_position = Some(mouse_pos);
@@ -251,6 +273,24 @@ fn do_game_logic(input: &InputStatus, state: &mut ActiveGame) {
                 );
                 if result.is_err() {
                     println!("Bruh how?")
+                } else {
+                    if state.game.game_is_over() {
+                        let winner = state.game.get_winner();
+                        let text = match winner {
+                            None => "Oavgjort, Spela igen?".to_string(),
+                            Some(ChessPieceColor::White) => "Vit vann, Spela igen?".to_string(),
+                            Some(ChessPieceColor::Black) => "Svart vann, Spela igen?".to_string(),
+                        };
+
+                        main_state.input_staus.mouse_released = false;
+                        main_state.active_message = Some(PendingAction {
+                            text,
+                            confirm: main_state.render_config.icons.confirm.clone(),
+                            cancel: main_state.render_config.icons.exit.clone(),
+                            confirm_value: Action::Restart,
+                            cancel_value: Action::None,
+                        })
+                    }
                 }
             }
         } else {
@@ -260,13 +300,30 @@ fn do_game_logic(input: &InputStatus, state: &mut ActiveGame) {
     }
 }
 
+fn handle_action(action: Action, active_game: &mut ActiveGame) {
+    match action {
+        Action::Restart => {
+            let mut game = chess_engine::chess_game::Game::new();
+            game.set_up_board();
+            active_game.game = game;
+            active_game.hover_position = None;
+            active_game.possible_moves = None;
+            active_game.selected_square = None;
+        }
+        Action::Quit => exit(0),
+        Action::None => {}
+    }
+}
+
 impl event::EventHandler<ggez::GameError> for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        do_game_logic(&self.input_staus, &mut self.active_game);
+        if self.active_message.is_none() {
+            do_game_logic(self);
+        }
 
         render_clear(ctx);
         render_board(ctx)?;
@@ -277,17 +334,47 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 render_highlight(ctx, Some(*pos), MOVE_COLOR)?;
             }
         }
-        let selected_button = render_buttons(ctx, self);
-        render_pieces(ctx, &self.render_config, &mut self.active_game)?;
 
-        // change skin
-        if selected_button.is_some()
-            && selected_button.unwrap() == 2
-            && self.input_staus.mouse_clicked
-        {
-            self.render_config.active_sprites_index += 1;
-            if self.render_config.active_sprites_index >= self.render_config.spritesets.len() {
-                self.render_config.active_sprites_index = 0
+        render_pieces(ctx, &self.render_config, &mut self.active_game)?;
+        if self.active_message.is_none() {
+            let selected_button = render_buttons(ctx, self);
+            // change skin
+            if selected_button.is_some() && self.input_staus.mouse_released {
+                match selected_button.unwrap() {
+                    0 => {
+                        self.active_message = Some(PendingAction {
+                            text: "Sluta spela?".to_string(),
+                            confirm: self.render_config.icons.confirm.clone(),
+                            cancel: self.render_config.icons.exit.clone(),
+                            confirm_value: Action::Quit,
+                            cancel_value: Action::None,
+                        })
+                    }
+                    1 => {
+                        self.active_message = Some(PendingAction {
+                            text: "Spela igen?".to_string(),
+                            confirm: self.render_config.icons.confirm.clone(),
+                            cancel: self.render_config.icons.exit.clone(),
+                            confirm_value: Action::Restart,
+                            cancel_value: Action::None,
+                        })
+                    }
+                    2 => {
+                        self.render_config.active_sprites_index += 1;
+                        if self.render_config.active_sprites_index
+                            >= self.render_config.spritesets.len()
+                        {
+                            self.render_config.active_sprites_index = 0
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            let action = render_message(ctx, self)?;
+            if self.input_staus.mouse_released {
+                handle_action(action, &mut self.active_game);
+                self.active_message = None;
             }
         }
 
@@ -357,8 +444,17 @@ pub fn main() -> GameResult {
 
     let cb =
         ggez::ContextBuilder::new("vinlag_vicil_chess", "Vincent Lagerros and Victor Millberg")
-            .window_setup(ggez::conf::WindowSetup::default().title("Chess!"))
-            .window_mode(ggez::conf::WindowMode::default().dimensions(SCREEN_SIZE.0, SCREEN_SIZE.1))
+            .window_setup(
+                ggez::conf::WindowSetup::default()
+                    .title("Schack Deluxe Edition")
+                    .icon("/piece/horsey/wN.png")
+                    .samples(ggez::conf::NumSamples::One),
+            )
+            .window_mode(
+                ggez::conf::WindowMode::default()
+                    .dimensions(SCREEN_SIZE.0, SCREEN_SIZE.1)
+                    .borderless(false),
+            )
             .add_resource_path(resource_dir);
     let (mut ctx, event_loop) = cb.build()?;
     let state = MainState::new(&mut ctx)?;

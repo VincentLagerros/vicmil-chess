@@ -1,9 +1,9 @@
 use chess_engine::chess_game::{BoardPosition, ChessPiece, ChessPieceColor, ChessPieceId};
 use ggez::graphics::{self, Color, Rect};
-use ggez::{Context, GameResult};
+use ggez::{Context, GameError, GameResult};
 use glam::*;
 
-use crate::{ActiveGame, Icons, MainState, RenderConfig, SpriteSheet};
+use crate::{Action, ActiveGame, Icons, MainState, RenderConfig, SpriteSheet};
 
 pub(crate) const SCREEN_SIZE: (f32, f32) = (840f32, 840f32);
 
@@ -64,6 +64,20 @@ const BUTTON_COLOR_SELECTED: Color = Color {
     r: 0.39,
     g: 0.38,
     b: 0.37,
+    a: 1.0,
+};
+
+const CONFIRM_COLOR: Color = Color {
+    r: 0.39,
+    g: 0.88,
+    b: 0.37,
+    a: 1.0,
+};
+
+const ERROR_COLOR: Color = Color {
+    r: 0.89,
+    g: 0.38,
+    b: 0.35,
     a: 1.0,
 };
 
@@ -181,18 +195,9 @@ pub fn render_button(
     pos: Vec2,
     size: Vec2,
     icon: &graphics::Image,
-    is_selected: bool,
+    color: Color,
 ) -> GameResult<()> {
-    render_round_rect(
-        ctx,
-        pos,
-        size,
-        if is_selected {
-            BUTTON_COLOR_SELECTED
-        } else {
-            BUTTON_COLOR
-        },
-    )?;
+    render_round_rect(ctx, pos, size, color)?;
 
     graphics::draw(
         ctx,
@@ -204,10 +209,71 @@ pub fn render_button(
     Ok(())
 }
 
-pub(crate) fn render_buttons(ctx: &mut Context, state: &mut MainState) -> Option<usize> {
+pub(crate) fn render_message(ctx: &mut Context, state: &MainState) -> Result<Action, GameError> {
+    let msg = match &state.active_message {
+        Some(m) => m,
+        None => return Ok(Action::None),
+    };
+
+    let size = Vec2::new(300.0, 150.0);
+    let pos = Vec2::new(SCREEN_SIZE.0 / 2.0, SCREEN_SIZE.1 / 2.0);
+    let _err = render_round_rect(ctx, pos - size / 2.0, size, BUTTON_COLOR);
+    let mut text = graphics::Text::new(msg.text.clone());
+    let active_font = &state.render_config.fontsets[state.render_config.active_fontset_index];
+
+    text.set_font(active_font.font, active_font.font_size);
+
+    let _err2 = graphics::draw(
+        ctx,
+        &text,
+        graphics::DrawParam::new()
+            .dest(pos + Vec2::new(0.0, -50.0))
+            .offset(Vec2::new(0.5, 0.0)),
+    );
+
+    let confirm_size = Vec2::new(60.0, 60.0);
+    let confirm_pos = Vec2::new(pos.x - confirm_size.x * 1.5, pos.y);
+    let cancel_pos = Vec2::new(pos.x + confirm_size.x / 2.0, pos.y);
+
+    let mouse_x = state.input_staus.pos_x;
+    let mouse_y = state.input_staus.pos_y;
+
+    let is_hovering_confirm = is_inside_square(mouse_x, mouse_y, confirm_pos, confirm_size);
+    let is_hovering_cancel = is_inside_square(mouse_x, mouse_y, cancel_pos, confirm_size);
+
+    let mut confirm_color = CONFIRM_COLOR;
+    let mut cancel_color = ERROR_COLOR;
+
+    if is_hovering_confirm {
+        confirm_color.a = 0.6;
+    }
+    if is_hovering_cancel {
+        cancel_color.a = 0.6;
+    }
+
+    render_button(ctx, confirm_pos, confirm_size, &msg.confirm, confirm_color)?;
+    render_button(ctx, cancel_pos, confirm_size, &msg.cancel, cancel_color)?;
+
+    if is_hovering_confirm {
+        return Ok(msg.confirm_value);
+    } else if is_hovering_cancel {
+        return Ok(msg.cancel_value);
+    }
+
+    Ok(Action::None)
+}
+
+fn is_inside_square(mouse_x: f32, mouse_y: f32, pos: Vec2, size: Vec2) -> bool {
+    return mouse_x > pos.x
+        && mouse_x < pos.x + size.x
+        && mouse_y > pos.y
+        && mouse_y < pos.y + size.y;
+}
+
+pub(crate) fn render_buttons(ctx: &mut Context, state: &MainState) -> Option<usize> {
     let icons: Vec<&graphics::Image> = vec![
         &state.render_config.icons.exit,
-       // &state.render_config.icons.surrender,
+        // &state.render_config.icons.surrender,
         &state.render_config.icons.replay,
         &state.render_config.icons.settings,
     ];
@@ -221,14 +287,21 @@ pub(crate) fn render_buttons(ctx: &mut Context, state: &mut MainState) -> Option
     for x in 0..3 {
         let pos = Vec2::new(start + 150.0 * (x as f32), 5.0);
         let size = Vec2::new(100.0, 50.0);
-        let is_hovering = mouse_x > pos.x
-            && mouse_x < pos.x + size.x
-            && mouse_y > pos.y
-            && mouse_y < pos.y + size.y;
+        let is_hovering = is_inside_square(mouse_x, mouse_y, pos, size);
         if is_hovering {
             hover_button = Some(x);
         }
-        let _err = render_button(ctx, pos, size, icons[x], is_hovering);
+        let _err = render_button(
+            ctx,
+            pos,
+            size,
+            icons[x],
+            if is_hovering {
+                BUTTON_COLOR_SELECTED
+            } else {
+                BUTTON_COLOR
+            },
+        );
     }
 
     hover_button
