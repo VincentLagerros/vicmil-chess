@@ -1,9 +1,11 @@
 //! The simplest possible example that does something.
 #![allow(clippy::unnecessary_wraps)]
 
+mod chess_server;
 mod render;
 
 use std::process::exit;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::{env, path};
 
 use chess_engine::chess_game::{BoardMove, BoardPosition, ChessPieceColor, ChessPieceId, Game};
@@ -55,6 +57,8 @@ struct Icons {
 
 #[derive(Clone, Copy)]
 enum Action {
+    StartServer,
+    StartClient,
     Restart,
     Quit,
     None,
@@ -72,7 +76,7 @@ struct RenderConfig {
     spritesets: Vec<SpriteSheet>,
     fontsets: Vec<FontSet>,
 
-    // because every frame is redrawn in a render loop 
+    // because every frame is redrawn in a render loop
     // you can switch render or font at any time
     active_sprites_index: usize,
     active_fontset_index: usize,
@@ -88,7 +92,9 @@ struct InputStatus {
     mouse_released: bool,
 }
 
-struct MainState {
+pub struct MainState {
+    frame: u64,
+    server: chess_server::Server,
     render_config: RenderConfig,
     active_message: Option<PendingAction>,
     active_game: ActiveGame,
@@ -167,7 +173,17 @@ impl MainState {
         let mut game = chess_engine::chess_game::Game::new();
         game.set_up_board();
 
+        let message = Some(PendingAction {
+            text: "Sluta spela?".to_string(),
+            confirm: icons.confirm.clone(),
+            cancel: icons.exit.clone(),
+            confirm_value: Action::StartServer,
+            cancel_value: Action::None,
+        });
+
         let s = MainState {
+            server: chess_server::start_server(),
+            frame: 0,
             render_config: RenderConfig {
                 spritesets: vec![regular_sprites, horsey_sprites, emoji_sprites],
                 fontsets: vec![regular_font, nice_font],
@@ -188,7 +204,7 @@ impl MainState {
                 mouse_clicked: false,
                 mouse_released: false,
             },
-            active_message: None,
+            active_message: message,
         };
         Ok(s)
     }
@@ -297,16 +313,33 @@ fn do_game_logic(main_state: &mut MainState) {
     }
 }
 
+fn network_callback(input: String) -> String {
+    println!("GOT::: {}", input);
+    return "hello from server".to_string();
+}
+
 /** Handle action triggered by a popup */
-fn handle_action(action: Action, active_game: &mut ActiveGame) {
+fn handle_action(action: Action, state: &mut MainState) {
+    
+
     match action {
+        Action::StartClient => {}
+        Action::StartServer => {
+            
+            /*thread::spawn(|| {
+                let server_result = chess_server::start(state, network_callback);
+                if server_result.is_err() {
+                    println!("Server Error");
+                }
+            })*/
+        }
         Action::Restart => {
             let mut game = chess_engine::chess_game::Game::new();
             game.set_up_board();
-            active_game.game = game;
-            active_game.hover_position = None;
-            active_game.possible_moves = None;
-            active_game.selected_square = None;
+            state.active_game.game = game;
+            state.active_game.hover_position = None;
+            state.active_game.possible_moves = None;
+            state.active_game.selected_square = None;
         }
         Action::Quit => exit(0),
         Action::None => {}
@@ -319,6 +352,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
+        chess_server::server_loop(&mut self.server, &mut self.active_game.game);
+
         // cant move anything while a popup is active, game is paused
         if self.active_message.is_none() {
             do_game_logic(self);
@@ -376,7 +411,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             // be aware that clicking anywhere on the screen counts as Action::None
             let action = render_message(ctx, self)?;
             if self.input_staus.mouse_released {
-                handle_action(action, &mut self.active_game);
+                handle_action(action, self);
                 self.active_message = None;
             }
         }
@@ -384,6 +419,9 @@ impl event::EventHandler<ggez::GameError> for MainState {
         // mouse_released and mouse_clicked is only active for 1 frame
         self.input_staus.mouse_released = false;
         self.input_staus.mouse_clicked = false;
+        //let fps = ggez::timer::fps(ctx);
+        //println!("{}",fps);
+        self.frame += 1;
         graphics::present(ctx)?;
         Ok(())
     }
@@ -434,6 +472,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
 }
 
 pub fn main() -> GameResult {
+    let (tx, rx): (Sender<i32>, Receiver<i32>) = mpsc::channel();
+    
     // set up resource path from the base of the project
     let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
         let mut path = path::PathBuf::from(manifest_dir);
@@ -459,5 +499,6 @@ pub fn main() -> GameResult {
             .add_resource_path(resource_dir);
     let (mut ctx, event_loop) = cb.build()?;
     let state = MainState::new(&mut ctx)?;
-    event::run(ctx, event_loop, state)
+    event::run(ctx, event_loop, state);
+    /**/
 }
